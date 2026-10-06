@@ -1,0 +1,58 @@
+services:
+
+  database:
+    image: mysql:8.0
+    container_name: jenkins-assessment-database
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: assessmentdb
+      MYSQL_USER: assessmentuser
+      MYSQL_PASSWORD: assessmentpassword
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    image: jenkins-assessment-backend:1.0
+    container_name: jenkins-assessment-backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: database
+      DB_NAME: assessmentdb
+      DB_USER: assessmentuser
+      DB_PASSWORD: assessmentpassword
+    ports:
+      - "5001:5000"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+    image: jenkins-assessment-frontend:1.0
+    container_name: jenkins-assessment-frontend
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
